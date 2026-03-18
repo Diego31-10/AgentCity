@@ -1,695 +1,204 @@
-# 🤖 AgentCity
- ### Physical Visualization of Autonomous AI Agents
+<div align="center">
 
-![ESP32](https://img.shields.io/badge/ESP32-IoT-blue)
-![AI Agents](https://img.shields.io/badge/AI-Multi--Agent-green)
-![Python](https://img.shields.io/badge/Python-Backend-yellow)
-![Status](https://img.shields.io/badge/Status-Active-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-lightgrey)
+# 🦞 ClawCity
 
----
+**A physical city where OpenClaw agents come to life**
 
-# 🌐 Overview
+[![OpenClaw](https://img.shields.io/badge/Powered_by-OpenClaw-7c3aed?style=flat-square)](https://docs.openclaw.ai)
+[![DeepSeek](https://img.shields.io/badge/LLM-DeepSeek-06b6d4?style=flat-square)](https://deepseek.com)
+[![Telegram](https://img.shields.io/badge/Interface-Telegram-2CA5E0?style=flat-square)](https://core.telegram.org/bots)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square)](./LICENSE)
 
-**AgentCity Lab** is an **AI + IoT project** that physically visualizes how autonomous AI agents collaborate to solve tasks.
+*What if you could watch AI agents think, collaborate, and act — in the real world?*
 
-Instead of AI agents operating invisibly in software, this system creates a **miniature office environment** where each agent is represented by a **physical avatar** controlled by an **ESP32 microcontroller**.
-
-Agents move between locations in their office depending on what they are doing:
-
-- receiving information
-- processing tasks
-- communicating results
-
-The result is a **physical simulation of multi-agent systems** where users can **see AI collaboration in real time**.
+</div>
 
 ---
 
-# 🎯 Project Goal
+## 🌆 The Idea
 
-The goal of this project is to make **AI agent workflows visible and intuitive**.
+[OpenClaw](https://docs.openclaw.ai) is a powerful framework for running autonomous AI agents. But agents are invisible — they live in terminals, logs, and API responses. You send a message, something happens, you get a reply.
 
-By combining **AI agents, IoT hardware, and physical movement**, the system demonstrates how autonomous systems:
+**ClawCity makes that invisible process visible.**
 
-1. receive tasks
-2. collaborate
-3. process information
-4. produce results
-
-All represented physically in a miniature **AI office environment**.
+Each OpenClaw agent gets a physical body: a lobster avatar in a miniature office, mounted on a servo motor. When an agent receives a task, its lobster moves. When it's thinking, the LED changes color. When it's done, it goes back to rest. You can watch the entire multi-agent pipeline unfold in front of you, in real time, in the physical world.
 
 ---
 
-# 🧠 Core Concepts
+## 🦞 The Residents
 
-This project demonstrates concepts from multiple technical domains:
+ClawCity has three permanent residents, each one an OpenClaw agent with its own personality, memory, and role:
 
-| Domain | Concepts |
-|------|------|
-Artificial Intelligence | Multi-Agent Systems |
-IoT | ESP32 device control |
-Automation | Task delegation |
-Human-Computer Interaction | Voice + messaging interfaces |
-Embedded Systems | Real-time hardware control |
-System Architecture | Distributed agent workflow |
+<div align="center">
+
+| Name | Role | Personality |
+|------|------|-------------|
+| **Xocas** | Planner | The strategist. Receives every task first, breaks it down, and decides who does what. Never acts without a plan. |
+| **Momo** | Researcher | The curious one. Digs through calendars, data, and context to give Xocas's plan something real to work with. |
+| **Llados** | Executor | The doer. Takes Momo's research and makes things happen — schedules meetings, sends notifications, triggers automations. |
+
+</div>
 
 ---
 
-# 🏢 Physical Office Concept
-
-Each AI agent has its own **mini office** containing three work areas.
-
+## 🏢 Their Office
+Office Layout (per agent)
+```
+[ 💻 Computer ] ──────── [ 🛋️ Sofa ] ──────── [ 📞 Phone ]
+      0°                    90°                   180°
+   WORKING                  IDLE              COMMUNICATION
 ```
 
-[ Computer ] ----- [ Sofa ] ----- [ Phone ]
-0%              50%            100%
+Each servo sweeps between these three positions based on the agent's current state.
 
-WORKING           IDLE       COMMUNICATION
+The lobster avatar physically moves between these zones depending on what the agent is doing at that moment. There is no screen refresh, no terminal output — just a small figure sliding across a tiny desk.
+
+---
+
+## 🎨 How You Know What's Happening
+
+Each office has three ways of communicating agent state:
+
+### **1. The servo** 
+Moves the lobster to the right spot — working at the computer, resting on the sofa, or on the phone communicating with another agent.
+
+### **2. The RGB LED** 
+Changes color instantly:
+
+| Color | Meaning |
+|-------|---------|
+| 🟡 Yellow | Agent is idle, waiting for work |
+| 🔵 Blue | Agent is communicating — receiving or sending |
+| 🟢 Green | Agent is working — processing, reasoning, executing |
+| 🔴 Red | Something went wrong |
+
+### **3. The LCD screen** 
+Shows a short description of exactly what the agent is doing right now: *"Creating plan"*, *"Running research"*, *"Executing actions"*.
+
+---
+## 🛠️ Hardware
+
+### Components
+
+| Component | Qty | Purpose |
+|-----------|-----|---------|
+| ESP32 DevKit V1 | 1 | Main controller — WiFi, I2C, PWM |
+| PCA9685 | 1 | I2C PWM driver for 3 servos (addr `0x40`) |
+| SG90 Servo | 3 | Move each lobster avatar |
+| LCD 16x2 + I2C module | 3 | Display current agent task |
+| RGB LED (common cathode) | 3 | Visual state indicator |
+| Resistor 220Ω | 9 | Current limiting for RGB LEDs (3 per LED) |
+| Capacitor 1000µF / 10V | 1 | Voltage stabilizer on servo power rail |
+| 5V / 5A Power Supply | 1 | Powers entire system |
+| Protoboard + PCB 10×10 | 1 | Circuit integration |
+| Terminals, wires | — | Connections |
+
+---
+## ⚙️ System Architecture
 
 ```
-
-| Location | Meaning |
-|------|------|
-Computer | Agent is working |
-Sofa | Agent is idle |
-Phone | Agent is communicating |
-
-A **servo motor moves the agent avatar** between these locations.
-
----
-
-# 🎛 Agent State Model
-
-Every agent operates as an independent **state machine**.
-
-State cycle:
-
-```
-
-IDLE
-↓
-COMMUNICATION
-↓
-WORKING
-↓
-COMMUNICATION
-↓
-IDLE
-
-```
-
-Meaning:
-
-| State | Description |
-|------|------|
-IDLE | Waiting for tasks |
-COMMUNICATION | Receiving or sending information |
-WORKING | Processing or executing tasks |
-
-Each agent executes this cycle **independently** when participating in a workflow.
-
----
-
-# 💡 Visual Feedback System
-
-Each agent communicates its state using hardware indicators.
-
-| Component | Purpose |
-|------|------|
-Servo | Moves agent avatar |
-RGB LED | Displays current state |
-LCD | Shows current task |
-
-### LED Status Colors
-
-| State | Color |
-|------|------|
-Idle | 🟡 Yellow |
-Communication | 🔵 Blue |
-Working | 🟢 Green |
-Error | 🔴 Red |
-
----
-
-# ⚙️ System Architecture
-
-```
-
-User Interaction
-│
-├── Telegram Command
-└── Voice Command
-│
-▼
-Speech-to-Text
-│
-▼
-AI Agent System
-│
-▼
-Task Delegation
-│
-▼
-Backend API
-│
-▼
-Agent State JSON
-│
-▼
-ESP32
-│
-▼
-Servos + LCD + RGB LEDs
-│
-▼
-Physical AI Office
-
-```
-
-The backend sends agent state updates to the ESP32, which then controls the hardware.
-
----
-
-# 🤖 AI Agents
-
-The system contains **three specialized agents**.
-
----
-
-## 🧠 Planner Agent
-
-Responsibilities:
-
-- receive user tasks
-- analyze requests
-- create execution plans
-- delegate tasks
-
-Examples:
-
-- interpreting user commands
-- planning workflows
-- coordinating agents
-
----
-
-## 🔎 Research Agent
-
-Responsibilities:
-
-- gather information
-- analyze external data
-- prepare research results
-
-Examples:
-
-- reading calendars
-- retrieving information
-- analyzing schedules
-
----
-
-## ⚙️ Executor Agent
-
-Responsibilities:
-
-- perform real actions
-- execute automation tasks
-- return final results
-
-Examples:
-
-- creating meetings
-- sending notifications
-- triggering automations
-
----
-
-# 🔄 Multi-Agent Workflow
-
-The agents collaborate sequentially.
-
-```
-
-User
-│
-▼
-Planner
-│
-▼
-Researcher
-│
-▼
-Executor
-│
-▼
-User Response
-
-```
-
-Each agent executes its own **state cycle** during the process.
-
----
-
-# 📡 Detailed Workflow Example
-
-## Scenario
-
-User command:
-
-```
-
-Organize my meetings tomorrow
-
+Telegram Bot
+     │
+     ▼
+Backend (Python)
+     │
+     ├── OpenClaw Gateway
+     │        │
+     │        ├── Xocas  (Planner)    ← deepseek/deepseek-reasoner
+     │        ├── Momo   (Researcher) ← deepseek/deepseek-chat
+     │        └── Llados (Executor)   ← deepseek/deepseek-chat
+     │
+     ├── State Extractor  ──► REST API  ──► ESP32 (WiFi)
+     │
+     └── Pipeline: Xocas → Momo → Llados → Response
+                                                │
+                                          ESP32 Controls
+                                        ┌──────┼──────┐
+                                     Servos  LCDs  RGB LEDs
 ```
 
 ---
 
-# Step 1 — User Sends Task
+## 🔄 Workflow Example
 
-System state:
+**User sends via Telegram:** `/task organize my meetings tomorrow`
 
-| Agent | State |
-|------|------|
-Planner | IDLE |
-Researcher | IDLE |
-Executor | IDLE |
+| Step | Agent | State | Physical |
+|------|-------|-------|----------|
+| 1 | All | `IDLE` | All lobsters on sofa, yellow LEDs |
+| 2 | Xocas | `COMMUNICATION` | Moves to phone, blue LED, LCD: "Receiving task" |
+| 3 | Xocas | `WORKING` | Moves to computer, green LED, LCD: "Creating plan" |
+| 4 | Xocas | `COMMUNICATION` | Back to phone, LCD: "Sending plan" → `IDLE` |
+| 5 | Momo | `COMMUNICATION` | Moves to phone, blue LED, LCD: "Receiving plan" |
+| 6 | Momo | `WORKING` | Moves to computer, green LED, LCD: "Running research" |
+| 7 | Momo | `COMMUNICATION` | Back to phone, LCD: "Sending research" → `IDLE` |
+| 8 | Llados | `COMMUNICATION` | Moves to phone, blue LED, LCD: "Receiving data" |
+| 9 | Llados | `WORKING` | Moves to computer, green LED, LCD: "Executing actions" |
+| 10 | Llados | `COMMUNICATION` | Back to phone, LCD: "Sending response" → `IDLE` |
+| ✅ | All | `IDLE` | LEDs blink green, LCD: "DONE — Ready" |
+
+---
+## 🧠 Built on OpenClaw
+
+ClawCity wouldn't exist without [OpenClaw](https://docs.openclaw.ai).
+
+OpenClaw is the framework that runs each agent as a fully isolated entity with its own memory, tools, and model. Xocas, Momo, and Llados each live in their own OpenClaw workspace — they don't share memory, they don't interfere with each other, and each one can be powered by a different model if needed.
+
+The pipeline that connects them — Xocas plans → Momo researches → Llados executes — is orchestrated through OpenClaw's SDK, with each agent's state extracted in real time and sent to the physical hardware.
+
+If you're curious about how OpenClaw works, their [documentation](https://docs.openclaw.ai) is the best place to start.
 
 ---
 
-# Step 2 — Planner Receives Request
+## 🌍 Why This Project Exists
 
-Planner moves to **Phone**.
+Most people have no intuition for what multi-agent AI systems actually do. They know "AI" does something, but the process — the delegation, the specialization, the back-and-forth between agents — is completely opaque.
 
-State:
+ClawCity tries to fix that. Not with a dashboard or a diagram, but with physical movement in a room. When a kid (or an investor, or a skeptic) watches three small lobsters shuffle around their offices in response to a single message, something clicks that a terminal window never achieves.
 
-```
-
-COMMUNICATION
-
-```
-
-Hardware:
-
-- Servo → Phone
-- LED → Blue
-- LCD → "Receiving task"
+It's also just a fun thing to watch.
 
 ---
 
-# Step 3 — Planner Creates Plan
+## 🔮 What's Next
 
-Planner moves to **Computer**.
-
-State:
-
-```
-
-WORKING
-
-```
-
-Hardware:
-
-- Servo → Computer
-- LED → Green
-- LCD → "Creating plan"
+- More agents, more offices — the city grows
+- A web dashboard that mirrors the physical state in real time
+- Computer vision to monitor the physical model
+- Smart home integrations so Llados can control real devices
+- Voice commands to trigger tasks without Telegram
 
 ---
-
-# Step 4 — Planner Sends Plan
-
-Planner returns to **Phone**.
-
-State:
-
-```
-
-COMMUNICATION
-
-```
-
-Hardware:
-
-- Servo → Phone
-- LED → Blue
-- LCD → "Sending plan"
-
-Planner then returns to **IDLE**.
-
----
-
-# Step 5 — Researcher Receives Plan
-
-Researcher moves to **Phone**.
-
-State:
-
-```
-
-COMMUNICATION
-
-```
-
-Hardware:
-
-- Servo → Phone
-- LED → Blue
-- LCD → "Receiving plan"
-
----
-
-# Step 6 — Researcher Performs Analysis
-
-Researcher moves to **Computer**.
-
-State:
-
-```
-
-WORKING
-
-```
-
-Hardware:
-
-- Servo → Computer
-- LED → Green
-- LCD → "Running research"
-
----
-
-# Step 7 — Researcher Sends Results
-
-Researcher returns to **Phone**.
-
-State:
-
-```
-
-COMMUNICATION
-
-```
-
-Hardware:
-
-- Servo → Phone
-- LED → Blue
-- LCD → "Sending research"
-
-Researcher returns to **IDLE**.
-
----
-
-# Step 8 — Executor Receives Data
-
-Executor moves to **Phone**.
-
-State:
-
-```
-
-COMMUNICATION
-
-```
-
-Hardware:
-
-- Servo → Phone
-- LED → Blue
-- LCD → "Receiving data"
-
----
-
-# Step 9 — Executor Executes Task
-
-Executor moves to **Computer**.
-
-State:
-
-```
-
-WORKING
-
-```
-
-Hardware:
-
-- Servo → Computer
-- LED → Green
-- LCD → "Executing actions"
-
-Examples:
-
-- creating calendar events
-- scheduling meetings
-
----
-
-# Step 10 — Executor Sends Result
-
-Executor returns to **Phone**.
-
-State:
-
-```
-
-COMMUNICATION
-
-```
-
-Hardware:
-
-- Servo → Phone
-- LED → Blue
-- LCD → "Sending response"
-
-The user receives the final result.
-
-Executor returns to **IDLE**.
-
----
-
-# ✅ Task Completion Signal
-
-When the workflow finishes:
-
-All agents perform a **completion signal**.
-
-| Component | Behavior |
-|------|------|
-LED | Green blinking |
-LCD | Displays "DONE" |
-Servo | Returns to idle position |
-
-Example display:
-
-```
-
-DONE
-Ready for tasks
-
-```
-
----
-
-# 🎤 Voice Interaction
-
-Users can interact with the system using voice commands.
-
-Example:
-
-```
-
-"Ok agents, organize my meetings tomorrow"
-
-```
-
-Voice flow:
-
-```
-
-User speech
-│
-▼
-Microphone input
-│
-▼
-Speech-to-text
-│
-▼
-AI agents analyze request
-│
-▼
-Agents execute workflow
-│
-▼
-Physical office reacts
-
-```
-
----
-
-# 💬 Telegram Integration
-
-The system also supports remote interaction via Telegram.
-
-Example command:
-
-```
-
-/task organize my meetings tomorrow
-
-````
-
-The request enters the same **agent workflow pipeline**.
-
----
-
-# 📡 Backend Communication Example
-
-Backend sends agent states to the ESP32.
-
-Example JSON:
-
-```json
-{
-  "planner": {
-    "state": "communication",
-    "task": "receiving request"
-  },
-  "researcher": {
-    "state": "idle",
-    "task": "waiting"
-  },
-  "executor": {
-    "state": "idle",
-    "task": "waiting"
-  }
-}
-````
-
-ESP32 interprets the state and updates:
-
-* servo position
-* LED color
-* LCD text
-
----
-
-# 🔧 Hardware Components
-
-| Component         | Purpose                 |
-| ----------------- | ----------------------- |
-| ESP32             | Main controller         |
-| Servo Motors      | Move agents             |
-| LCD Displays      | Display tasks           |
-| RGB LEDs          | State indicators        |
-| Microphone Module | Voice input             |
-| Custom PCB        | Circuit integration     |
-| Physical Model    | Mini office environment |
-
----
-
-# 🧰 Software Stack
-
-| Technology     | Purpose             |
-| -------------- | ------------------- |
-| Python         | Backend logic       |
-| OpenClaw       | Agent framework     |
-| LLM APIs       | Reasoning           |
-| ESP32 Arduino  | Hardware control    |
-| REST API       | Communication layer |
-| Telegram Bot   | Messaging interface |
-| Speech-to-Text | Voice commands      |
-
----
-
-# 📂 Repository Structure
-
-```
-AgentCity-lab
-│
-├── hardware
-│   ├── circuits
-│   ├── pcb
-│   └── esp32
-│
-├── backend
-│   ├── agents
-│   ├── api
-│   └── automation
-│
-├── speech
-│   └── speech_to_text
-│
-├── docs
-│   └── diagrams
-│
-└── README.md
-```
-
----
-
-## 👥 Meet the Team
-
----
-
-### 🧠 AI & Software Engineering
-**Diego Torres** | [GitHub](https://github.com/Diego31-10)
-
-**Core Responsibilities:**
-* **AI Architecture:** Designing and optimizing neural network structures.
-* **Backend Development:** Building robust server-side infrastructure and APIs.
-* **Speech Processing:** Developing advanced audio-to-text and NLP pipelines.
-* **Automation Logic:** Engineering intelligent, event-driven workflows.
-* **LLM Integration:** Implementing and fine-tuning Large Language Models.
-
----
-
-### ⚙️ Hardware & Electronics
-**Juan José Medina** | [GitHub](https://github.com/JuanjoMedina23)
-
-**Core Responsibilities:**
-* **Firmware Engineering:** Advanced ESP32 programming and IoT connectivity.
-* **Circuit Design:** Schematics and electronic system analysis.
-* **PCB Development:** Custom printed circuit board design and routing.
-* **Physical Prototyping:** Structural model construction and hardware assembly.
-
----
-
-# 🚀 Future Improvements
-
-Potential future features:
-
-* real-time web dashboard
-* computer vision monitoring
-* additional AI agents
-* voice response (text-to-speech)
-* smart home integrations
-* distributed IoT nodes
-
----
-
-# 📚 Educational Value
-
-This project demonstrates real-world concepts including:
-
-* multi-agent AI systems
-* IoT hardware integration
-* automation pipelines
-* embedded programming
-* human-AI interaction
-
+## 👥 Team
+
+### 🧠 AI & Software — Diego Torres
+[![GitHub](https://img.shields.io/badge/GitHub-Diego31--10-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Diego31-10)
+
+* AI architecture 
+* Backend
+* LLM integration
+* OpenClaw pipeline
+* Telegram bot
+
+### ⚙️ Hardware & Electronics — Juan José Medina
+[![GitHub](https://img.shields.io/badge/GitHub-JuanjoMedina23-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/JuanjoMedina23)
+
+* ESP32 firmware
+* Circuit design
+* PCB
+* Physical model construction
 ---
 
 ## 📜 License
 
-This project is licensed under the **MIT License**.  
-For more details, please see [LICENSE](./LICENSE).
+MIT — see [LICENSE](./LICENSE)
 
 ---
 
-# ⭐ Support the Project
+<div align="center">
 
-If you find this project interesting, consider giving the repository a **star ⭐**.
+*Built with 🦞 and ❤️*
+
+**ClawCity** — *Where AI agents get a body*
+
+</div>
