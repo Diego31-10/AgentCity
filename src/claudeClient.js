@@ -4,7 +4,11 @@
  */
 import OpenAI from 'openai';
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || 'OPENROUTER_API_KEY_REDACTED';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+if (!OPENROUTER_API_KEY) {
+  throw new Error('OPENROUTER_API_KEY not found in .env. Please set it before running ClawCity.');
+}
 
 export function createClient() {
   return new OpenAI({
