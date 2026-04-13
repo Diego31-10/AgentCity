@@ -27,12 +27,12 @@
 #include <LiquidCrystal_I2C.h>
 
 // ─── WiFi Config ────────────────────────────────────────────────
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID     = "DIEGO";
+const char* WIFI_PASSWORD = "TpDeDatv$039";
 
 // ─── AgentCity API ──────────────────────────────────────────────
 // Replace with your PC's local IP where AgentCity is running
-const char* API_URL = "http://192.168.1.X:5001/states";
+const char* API_URL = "http://192.168.1.9:5001/states";
 
 // How often to poll the API (milliseconds)
 const unsigned long POLL_INTERVAL = 500;
@@ -48,19 +48,25 @@ Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(0x40);
 // Servo pulse range (SG90: ~150-600)
 #define SERVO_MIN  150   // 0°   = WORKING (at PC)
 #define SERVO_MID  375   // 90°  = IDLE    (on sofa)
-#define SERVO_MAX  600   // 180° = COMMUNICATING (on phone)
+#define SERVO_MAX  550   // ~180° = COMMUNICATING (on phone) (calibrated for your SG90)
 
 // ─── RGB LED Pins ────────────────────────────────────────────────
 // Each agent has 3 pins: R, G, B
 struct RGBPin { int r, g, b; };
 
-RGBPin LED_XOCAS  = {25, 26, 27};
-RGBPin LED_MOMO   = {14, 12, 13};
-RGBPin LED_LLADOS = {32, 33, 23};  // GPIO23 (output-capable pin for PWM)
+// XOCAS OK
+RGBPin LED_XOCAS = {25, 26, 27};
 
-// ─── PWM Output (Buzzer / Status Indicator) ──────────────────────
-#define PWM_OUTPUT_PIN 2    // GPIO2 - supports PWM, safe for ESP32
-#define PWM_FREQUENCY 1000  // 1kHz buzzer tone
+// MOMO (cableado final): usa el LED que estaba en LLADOS (R/G invertidos)
+RGBPin LED_MOMO = {33, 32, 23};  // R=GPIO33, G=GPIO32, B=GPIO23
+
+// LLADOS (cableado final): usa el LED que estaba en MOMO (R/G invertidos)
+RGBPin LED_LLADOS = {12, 14, 13}; // R=GPIO12, G=GPIO14, B=GPIO13
+
+// ─── Buzzer / Status Indicator ───────────────────────────────────
+// ESP32 Arduino core v3.x: ledcSetup/ledcAttachPin ya no existen.
+// Usamos tone() para beeps (más compatible).
+#define BUZZER_PIN 2
 
 // ─── LCD Displays (I2C) ──────────────────────────────────────────
 // Each LCD needs a unique I2C address. Set jumpers on I2C modules:
@@ -81,7 +87,28 @@ AgentState prev_xocas  = {"", ""};
 AgentState prev_momo   = {"", ""};
 AgentState prev_llados = {"", ""};
 
+// Current (for LCD scrolling)
+AgentState cur_xocas  = {"IDLE", "Waiting..."};
+AgentState cur_momo   = {"IDLE", "Waiting..."};
+AgentState cur_llados = {"IDLE", "Waiting..."};
+
 unsigned long lastPoll = 0;
+
+// ─── LCD Scrolling ───────────────────────────────────────────────
+// Option 3: Line 1 = "AGENT STATE" (fixed). Line 2 = task (scroll if >16).
+const unsigned long SCROLL_STEP_MS  = 250;
+const unsigned long SCROLL_PAUSE_MS = 800;  // pause at start/end
+
+struct ScrollState {
+  String text;
+  int pos;
+  bool forward;
+  unsigned long nextAt;
+};
+
+ScrollState sc_xocas  = {"", 0, true, 0};
+ScrollState sc_momo   = {"", 0, true, 0};
+ScrollState sc_llados = {"", 0, true, 0};
 
 // ─── Setup ───────────────────────────────────────────────────────
 void setup() {
@@ -93,11 +120,9 @@ void setup() {
   initLEDs(LED_MOMO);
   initLEDs(LED_LLADOS);
 
-  // Init PWM output
-  pinMode(PWM_OUTPUT_PIN, OUTPUT);
-  ledcSetup(0, PWM_FREQUENCY, 8);          // Channel 0, 1kHz, 8-bit (0-255)
-  ledcAttachPin(PWM_OUTPUT_PIN, 0);
-  ledcWrite(0, 0);                         // Start silent
+  // Init buzzer
+  pinMode(BUZZER_PIN, OUTPUT);
+  noTone(BUZZER_PIN);
 
   // Init PCA9685
   pca.begin();
@@ -125,30 +150,48 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
+  // Poll API
   if (now - lastPoll >= POLL_INTERVAL) {
     lastPoll = now;
 
     if (WiFi.status() != WL_CONNECTED) {
       Serial.println("[WiFi] Disconnected. Reconnecting...");
       connectWiFi();
-      return;
+    } else {
+      AgentState xocas, momo, llados;
+      if (fetchStates(xocas, momo, llados)) {
+        // Apply to hardware only when state/task changes
+        if (xocas.state != prev_xocas.state || xocas.task != prev_xocas.task) {
+          applyState(SERVO_XOCAS, LED_XOCAS, lcd_xocas, xocas.state, xocas.task);
+          prev_xocas = xocas;
+          cur_xocas = xocas;
+        }
+        if (momo.state != prev_momo.state || momo.task != prev_momo.task) {
+          applyState(SERVO_MOMO, LED_MOMO, lcd_momo, momo.state, momo.task);
+          prev_momo = momo;
+          cur_momo = momo;
+        }
+        if (llados.state != prev_llados.state || llados.task != prev_llados.task) {
+          applyState(SERVO_LLADOS, LED_LLADOS, lcd_llados, llados.state, llados.task);
+          prev_llados = llados;
+          cur_llados = llados;
+        }
+      }
     }
+  }
 
-    AgentState xocas, momo, llados;
-    if (fetchStates(xocas, momo, llados)) {
-      if (xocas.state  != prev_xocas.state  || xocas.task  != prev_xocas.task)
-        applyState(SERVO_XOCAS,  LED_XOCAS,  lcd_xocas,  xocas.state,  xocas.task);
-
-      if (momo.state   != prev_momo.state   || momo.task   != prev_momo.task)
-        applyState(SERVO_MOMO,   LED_MOMO,   lcd_momo,   momo.state,   momo.task);
-
-      if (llados.state != prev_llados.state || llados.task != prev_llados.task)
-        applyState(SERVO_LLADOS, LED_LLADOS, lcd_llados, llados.state, llados.task);
-
-      prev_xocas  = xocas;
-      prev_momo   = momo;
-      prev_llados = llados;
-    }
+  // LCD scroll updates (non-blocking)
+  if (now >= sc_xocas.nextAt) {
+    renderAgentLCD(lcd_xocas, "XOCAS", cur_xocas.state, sc_xocas, cur_xocas.task);
+    scrollStep(sc_xocas);
+  }
+  if (now >= sc_momo.nextAt) {
+    renderAgentLCD(lcd_momo, "MOMO", cur_momo.state, sc_momo, cur_momo.task);
+    scrollStep(sc_momo);
+  }
+  if (now >= sc_llados.nextAt) {
+    renderAgentLCD(lcd_llados, "LLADOS", cur_llados.state, sc_llados, cur_llados.task);
+    scrollStep(sc_llados);
   }
 }
 
@@ -206,39 +249,124 @@ void applyState(int servoChannel, RGBPin led, LiquidCrystal_I2C& lcd,
   beepFeedback(state);
 
   // LCD
+  // Option 3 (fixed header + scrolling task) se refresca en loop()
+  // Aquí solo inicializamos el scroll si el task cambió.
   String agentName = (servoChannel == SERVO_XOCAS)  ? "XOCAS"  :
                      (servoChannel == SERVO_MOMO)    ? "MOMO"   : "LLADOS";
-  printLCD(lcd, agentName + " " + state, task);
+
+  if (agentName == "XOCAS") {
+    cur_xocas.state = state;
+    cur_xocas.task = task;
+    scrollReset(sc_xocas, task);
+  } else if (agentName == "MOMO") {
+    cur_momo.state = state;
+    cur_momo.task = task;
+    scrollReset(sc_momo, task);
+  } else {
+    cur_llados.state = state;
+    cur_llados.task = task;
+    scrollReset(sc_llados, task);
+  }
 }
 
 // ─── PWM Buzzer Feedback ─────────────────────────────────────────
 void beepFeedback(String state) {
-  int duration = 50;  // ms
-  int intensity = 200; // 0-255
-
+  // Beeps usando tone() (compatible con ESP32 core v3.x)
+  // IDLE: silencioso
   if (state == "WORKING") {
-    ledcWrite(0, intensity);
-    delay(duration);
-    ledcWrite(0, 0);
+    tone(BUZZER_PIN, 2000, 60);
+    delay(80);
+    noTone(BUZZER_PIN);
   } else if (state == "COMMUNICATING") {
-    ledcWrite(0, intensity);
-    delay(duration / 2);
-    ledcWrite(0, 0);
-    delay(duration / 4);
-    ledcWrite(0, intensity);
-    delay(duration / 2);
-    ledcWrite(0, 0);
+    tone(BUZZER_PIN, 2300, 40);
+    delay(60);
+    noTone(BUZZER_PIN);
+    delay(40);
+    tone(BUZZER_PIN, 1800, 40);
+    delay(60);
+    noTone(BUZZER_PIN);
   }
-  // IDLE: silent
 }
 
 // ─── LCD helper ──────────────────────────────────────────────────
-void printLCD(LiquidCrystal_I2C& lcd, String line1, String line2) {
+String fit16(const String& s) {
+  if (s.length() >= 16) return s.substring(0, 16);
+  String out = s;
+  while (out.length() < 16) out += " ";
+  return out;
+}
+
+String window16(const String& s, int start) {
+  if (s.length() == 0) return "                ";
+  if (s.length() <= 16) return fit16(s);
+  if (start < 0) start = 0;
+  if (start > (int)s.length() - 16) start = (int)s.length() - 16;
+  return s.substring(start, start + 16);
+}
+
+void scrollReset(ScrollState& sc, const String& text) {
+  sc.text = text;
+  sc.pos = 0;
+  sc.forward = true;
+  sc.nextAt = millis() + SCROLL_PAUSE_MS;
+}
+
+void scrollStep(ScrollState& sc) {
+  // If text fits, just refresh occasionally (avoid tight loop)
+  if (sc.text.length() <= 16) {
+    sc.nextAt = millis() + 500;
+    return;
+  }
+  int maxPos = (int)sc.text.length() - 16;
+  if (maxPos <= 0) {
+    sc.nextAt = millis() + 500;
+    return;
+  }
+
+  if (sc.forward) {
+    sc.pos++;
+    if (sc.pos >= maxPos) {
+      sc.pos = maxPos;
+      sc.forward = false;
+      sc.nextAt = millis() + SCROLL_PAUSE_MS;
+      return;
+    }
+  } else {
+    sc.pos--;
+    if (sc.pos <= 0) {
+      sc.pos = 0;
+      sc.forward = true;
+      sc.nextAt = millis() + SCROLL_PAUSE_MS;
+      return;
+    }
+  }
+  sc.nextAt = millis() + SCROLL_STEP_MS;
+}
+
+void printLCD(LiquidCrystal_I2C& lcd, const String& line1, const String& line2) {
+  // (used for boot/debug screens)
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(line1.substring(0, 16));
+  lcd.print(fit16(line1));
   lcd.setCursor(0, 1);
-  lcd.print(line2.substring(0, 16));
+  lcd.print(fit16(line2));
+}
+
+void renderAgentLCD(LiquidCrystal_I2C& lcd, const String& agent, const String& state,
+                    ScrollState& sc, const String& task) {
+  // Line 1 fixed
+  String line1 = agent + " " + state;
+  line1 = fit16(line1);
+
+  // If task changed, reset scroll
+  if (sc.text != task) scrollReset(sc, task);
+
+  String line2 = window16(sc.text, sc.pos);
+
+  lcd.setCursor(0, 0);
+  lcd.print(line1);
+  lcd.setCursor(0, 1);
+  lcd.print(line2);
 }
 
 // ─── LED helpers ─────────────────────────────────────────────────
