@@ -33,38 +33,42 @@ Make it practical and ready to use.`,
 export async function runXocas(client, task) {
   setState('xocas', 'COMMUNICATING', 'Recibiendo tarea...');
   log('  {cyan-fg}[Xocas]{/cyan-fg} En el telefono — recibiendo tarea...');
-  await sleep(400);
+  await sleep(3000);
   setState('xocas', 'WORKING', 'Creando plan estrategico...');
   log('  {cyan-fg}[Xocas]{/cyan-fg} Frente al PC — analizando y diseñando plan...');
   const plan = await askClaude(client, AGENTS.xocas.system, `Task: ${task}`);
-  setState('xocas', 'COMMUNICATING', 'Enviando plan a Momo...');
-  log('  {cyan-fg}[Xocas]{/cyan-fg} En el telefono — enviando plan a Momo...');
+  setState('xocas', 'COMMUNICATING', 'Llamando a Momo...');
+  log('  {cyan-fg}[Xocas]{/cyan-fg} En el telefono — llamando a Momo...');
   log(`  {grey-fg}Plan generado: ${plan.slice(0,80).replace(/\n/g,' ')}...{/grey-fg}`);
-  await sleep(400);
+
+  // Ambos en teléfono simultáneamente durante 3 segundos
+  setState('momo', 'COMMUNICATING', 'Recibiendo plan de Xocas...');
+  log('  {magenta-fg}[Momo]{/magenta-fg} En el telefono — recibiendo plan de Xocas...');
+  log('  {cyan-fg}[Xocas]{/cyan-fg} y {magenta-fg}[Momo]{/magenta-fg} en llamada...');
+  await sleep(3000);
   return plan;
 }
 
 export async function runMomo(client, plan, task) {
-  setState('momo', 'COMMUNICATING', 'Recibiendo plan de Xocas...');
-  log('  {magenta-fg}[Momo]{/magenta-fg} En el telefono — recibiendo plan de Xocas...');
-  await sleep(400);
   setState('momo', 'WORKING', 'Investigando y enriqueciendo...');
   log('  {magenta-fg}[Momo]{/magenta-fg} Frente al PC — investigando contexto...');
   const research = await askClaude(
     client, AGENTS.momo.system,
     `Original task: ${task}\n\nXocas plan:\n${plan}\n\nEnrich this with context and research.`
   );
-  setState('momo', 'COMMUNICATING', 'Enviando investigacion a Llados...');
-  log('  {magenta-fg}[Momo]{/magenta-fg} En el telefono — enviando investigacion a Llados...');
+  setState('momo', 'COMMUNICATING', 'Llamando a Llados...');
+  log('  {magenta-fg}[Momo]{/magenta-fg} En el telefono — llamando a Llados...');
   log(`  {grey-fg}Investigacion lista: ${research.slice(0,80).replace(/\n/g,' ')}...{/grey-fg}`);
-  await sleep(400);
+
+  // Ambos en teléfono simultáneamente durante 3 segundos
+  setState('llados', 'COMMUNICATING', 'Recibiendo investigacion...');
+  log('  {yellow-fg}[Llados]{/yellow-fg} En el telefono — recibiendo investigacion de Momo...');
+  log('  {magenta-fg}[Momo]{/magenta-fg} y {yellow-fg}[Llados]{/yellow-fg} en llamada...');
+  await sleep(3000);
   return research;
 }
 
 export async function runLlados(client, research, task) {
-  setState('llados', 'COMMUNICATING', 'Recibiendo investigacion...');
-  log('  {yellow-fg}[Llados]{/yellow-fg} En el telefono — recibiendo investigacion de Momo...');
-  await sleep(400);
   setState('llados', 'WORKING', 'Ejecutando y generando output...');
   log('  {yellow-fg}[Llados]{/yellow-fg} Frente al PC — generando resultado final...');
   const result = await askClaude(
@@ -73,7 +77,7 @@ export async function runLlados(client, research, task) {
   );
   setState('llados', 'COMMUNICATING', 'Entregando resultado...');
   log('  {yellow-fg}[Llados]{/yellow-fg} En el telefono — entregando resultado...');
-  await sleep(400);
+  await sleep(3000);
   return result;
 }
 
