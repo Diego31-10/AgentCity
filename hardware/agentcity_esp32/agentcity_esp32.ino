@@ -99,6 +99,9 @@ unsigned long lastPoll = 0;
 const unsigned long SCROLL_STEP_MS  = 250;
 const unsigned long SCROLL_PAUSE_MS = 800;  // pause at start/end
 
+// LCD debounce (avoid flicker when tasks change too fast)
+const unsigned long LCD_TASK_DEBOUNCE_MS = 700;
+
 struct ScrollState {
   String text;
   int pos;
@@ -109,6 +112,18 @@ struct ScrollState {
 ScrollState sc_xocas  = {"", 0, true, 0};
 ScrollState sc_momo   = {"", 0, true, 0};
 ScrollState sc_llados = {"", 0, true, 0};
+
+unsigned long lastLcdUpdate_xocas  = 0;
+unsigned long lastLcdUpdate_momo   = 0;
+unsigned long lastLcdUpdate_llados = 0;
+
+// Offline/backoff tracking
+unsigned long lastOkPollAt = 0;
+unsigned long pollIntervalMs = POLL_INTERVAL;
+const unsigned long POLL_INTERVAL_MIN = POLL_INTERVAL;
+const unsigned long POLL_INTERVAL_MAX = 5000;
+const unsigned long OFFLINE_AFTER_MS  = 3000;
+bool offlineMode = false;
 
 // ─── Setup ───────────────────────────────────────────────────────
 void setup() {
@@ -142,39 +157,108 @@ void setup() {
   applyState(SERVO_MOMO,   LED_MOMO,   lcd_momo,   "IDLE", "Waiting...");
   applyState(SERVO_LLADOS, LED_LLADOS, lcd_llados, "IDLE", "Waiting...");
 
+  lastOkPollAt = millis();
+  offlineMode = false;
+
   // Connect to WiFi
   connectWiFi();
 }
 
 // ─── Loop ────────────────────────────────────────────────────────
+void setOfflineUI() {
+  // Visual fallback when API/WiFi is down
+  // Keep servos at IDLE, LEDs red, LCD shows OFFLINE
+  pca.setPWM(SERVO_XOCAS, 0, SERVO_MID);
+  pca.setPWM(SERVO_MOMO, 0, SERVO_MID);
+  pca.setPWM(SERVO_LLADOS, 0, SERVO_MID);
+
+  setLED(LED_XOCAS, 255, 0, 0);
+  setLED(LED_MOMO, 255, 0, 0);
+  setLED(LED_LLADOS, 255, 0, 0);
+
+  // Show once (avoid flicker)
+  renderAgentLCD(lcd_xocas, "XOCAS", "OFFLINE", sc_xocas, "No API / WiFi");
+  renderAgentLCD(lcd_momo, "MOMO", "OFFLINE", sc_momo, "No API / WiFi");
+  renderAgentLCD(lcd_llados, "LLADOS", "OFFLINE", sc_llados, "No API / WiFi");
+}
+
+void maybeApplyDebouncedLCD(const String& agent, const String& state, const String& task) {
+  unsigned long now = millis();
+
+  if (agent == "XOCAS") {
+    if (now - lastLcdUpdate_xocas >= LCD_TASK_DEBOUNCE_MS || cur_xocas.task.length() == 0) {
+      cur_xocas.state = state;
+      cur_xocas.task = task;
+      scrollReset(sc_xocas, task);
+      lastLcdUpdate_xocas = now;
+    }
+  } else if (agent == "MOMO") {
+    if (now - lastLcdUpdate_momo >= LCD_TASK_DEBOUNCE_MS || cur_momo.task.length() == 0) {
+      cur_momo.state = state;
+      cur_momo.task = task;
+      scrollReset(sc_momo, task);
+      lastLcdUpdate_momo = now;
+    }
+  } else {
+    if (now - lastLcdUpdate_llados >= LCD_TASK_DEBOUNCE_MS || cur_llados.task.length() == 0) {
+      cur_llados.state = state;
+      cur_llados.task = task;
+      scrollReset(sc_llados, task);
+      lastLcdUpdate_llados = now;
+    }
+  }
+}
+
 void loop() {
   unsigned long now = millis();
 
-  // Poll API
-  if (now - lastPoll >= POLL_INTERVAL) {
+  // Adaptive polling / offline detection
+  if (now - lastPoll >= pollIntervalMs) {
     lastPoll = now;
+
+    bool ok = false;
 
     if (WiFi.status() != WL_CONNECTED) {
       Serial.println("[WiFi] Disconnected. Reconnecting...");
       connectWiFi();
-    } else {
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
       AgentState xocas, momo, llados;
       if (fetchStates(xocas, momo, llados)) {
-        // Apply to hardware only when state/task changes
+        ok = true;
+
+        // Back to fast polling when OK
+        pollIntervalMs = POLL_INTERVAL_MIN;
+        lastOkPollAt = now;
+        offlineMode = false;
+
+        // Apply to servos+LEDs when changes
         if (xocas.state != prev_xocas.state || xocas.task != prev_xocas.task) {
           applyState(SERVO_XOCAS, LED_XOCAS, lcd_xocas, xocas.state, xocas.task);
           prev_xocas = xocas;
-          cur_xocas = xocas;
+          maybeApplyDebouncedLCD("XOCAS", xocas.state, xocas.task);
         }
         if (momo.state != prev_momo.state || momo.task != prev_momo.task) {
           applyState(SERVO_MOMO, LED_MOMO, lcd_momo, momo.state, momo.task);
           prev_momo = momo;
-          cur_momo = momo;
+          maybeApplyDebouncedLCD("MOMO", momo.state, momo.task);
         }
         if (llados.state != prev_llados.state || llados.task != prev_llados.task) {
           applyState(SERVO_LLADOS, LED_LLADOS, lcd_llados, llados.state, llados.task);
           prev_llados = llados;
-          cur_llados = llados;
+          maybeApplyDebouncedLCD("LLADOS", llados.state, llados.task);
+        }
+      }
+    }
+
+    if (!ok) {
+      // Exponential-ish backoff
+      pollIntervalMs = min(pollIntervalMs * 2, POLL_INTERVAL_MAX);
+      if (now - lastOkPollAt >= OFFLINE_AFTER_MS) {
+        if (!offlineMode) {
+          offlineMode = true;
+          setOfflineUI();
         }
       }
     }
@@ -182,15 +266,15 @@ void loop() {
 
   // LCD scroll updates (non-blocking)
   if (now >= sc_xocas.nextAt) {
-    renderAgentLCD(lcd_xocas, "XOCAS", cur_xocas.state, sc_xocas, cur_xocas.task);
+    renderAgentLCD(lcd_xocas, "XOCAS", offlineMode ? "OFFLINE" : cur_xocas.state, sc_xocas, offlineMode ? "No API / WiFi" : cur_xocas.task);
     scrollStep(sc_xocas);
   }
   if (now >= sc_momo.nextAt) {
-    renderAgentLCD(lcd_momo, "MOMO", cur_momo.state, sc_momo, cur_momo.task);
+    renderAgentLCD(lcd_momo, "MOMO", offlineMode ? "OFFLINE" : cur_momo.state, sc_momo, offlineMode ? "No API / WiFi" : cur_momo.task);
     scrollStep(sc_momo);
   }
   if (now >= sc_llados.nextAt) {
-    renderAgentLCD(lcd_llados, "LLADOS", cur_llados.state, sc_llados, cur_llados.task);
+    renderAgentLCD(lcd_llados, "LLADOS", offlineMode ? "OFFLINE" : cur_llados.state, sc_llados, offlineMode ? "No API / WiFi" : cur_llados.task);
     scrollStep(sc_llados);
   }
 }
@@ -250,7 +334,7 @@ void applyState(int servoChannel, RGBPin led, LiquidCrystal_I2C& lcd,
 
   // LCD
   // Option 3 (fixed header + scrolling task) se refresca en loop()
-  // Aquí solo inicializamos el scroll si el task cambió.
+  // Aquí solo actualizamos el "current" y reseteamos scroll; el debounce está en maybeApplyDebouncedLCD().
   String agentName = (servoChannel == SERVO_XOCAS)  ? "XOCAS"  :
                      (servoChannel == SERVO_MOMO)    ? "MOMO"   : "LLADOS";
 
