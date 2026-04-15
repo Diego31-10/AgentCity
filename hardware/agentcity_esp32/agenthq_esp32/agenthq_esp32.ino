@@ -41,14 +41,14 @@ const unsigned long POLL_INTERVAL = 500;
 Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(0x40);
 
 // Servo channels on PCA9685
-#define SERVO_XOCAS   0
+#define SERVO_XOCAS   2
 #define SERVO_MOMO    1
-#define SERVO_LLADOS  2
+#define SERVO_LLADOS  0
 
 // Servo pulse range (SG90: ~150-600)
-#define SERVO_MIN  150   // 0°   = WORKING (at PC)
-#define SERVO_MID  375   // 90°  = IDLE    (on sofa)
-#define SERVO_MAX  550   // ~180° = COMMUNICATING (on phone) (calibrated for your SG90)
+#define SERVO_MIN  270   // 0°   = WORKING (at PC)
+#define SERVO_MID  370   // 90°  = IDLE    (on sofa)
+#define SERVO_MAX  470   // ~180° = COMMUNICATING (on phone) (calibrated for your SG90)
 
 // ─── RGB LED Pins ────────────────────────────────────────────────
 // Each agent has 3 pins: R, G, B
@@ -83,6 +83,17 @@ struct AgentState {
   String task;
 };
 
+struct TaskMetadata {
+  String format;  // "pdf", "docx", "md", "txt"
+  String topic;   // "cuenca", "resumen", etc
+};
+
+struct AgentDescriptions {
+  String xocas;   // Custom LCD description for Xocas
+  String momo;    // Custom LCD description for Momo
+  String llados;  // Custom LCD description for Llados
+};
+
 AgentState prev_xocas  = {"", ""};
 AgentState prev_momo   = {"", ""};
 AgentState prev_llados = {"", ""};
@@ -91,6 +102,11 @@ AgentState prev_llados = {"", ""};
 AgentState cur_xocas  = {"IDLE", "Waiting..."};
 AgentState cur_momo   = {"IDLE", "Waiting..."};
 AgentState cur_llados = {"IDLE", "Waiting..."};
+
+// Task metadata (from API)
+TaskMetadata taskMeta = {"", ""};
+AgentDescriptions agentDesc = {"", "", ""};
+unsigned long lastMetadataUpdate = 0;
 
 unsigned long lastPoll = 0;
 
@@ -308,6 +324,20 @@ bool fetchStates(AgentState& xocas, AgentState& momo, AgentState& llados) {
   llados.state = doc["llados"]["state"].as<String>();
   llados.task  = doc["llados"]["task"].as<String>();
 
+  // Extract metadata if available
+  if (doc.containsKey("metadata")) {
+    taskMeta.format = doc["metadata"]["format"].as<String>();
+    taskMeta.topic  = doc["metadata"]["topic"].as<String>();
+    lastMetadataUpdate = millis();
+  }
+
+  // Extract agent descriptions if available
+  if (doc.containsKey("descriptions")) {
+    agentDesc.xocas  = doc["descriptions"]["xocas"].as<String>();
+    agentDesc.momo   = doc["descriptions"]["momo"].as<String>();
+    agentDesc.llados = doc["descriptions"]["llados"].as<String>();
+  }
+
   return true;
 }
 
@@ -438,12 +468,45 @@ void printLCD(LiquidCrystal_I2C& lcd, const String& line1, const String& line2) 
 
 void renderAgentLCD(LiquidCrystal_I2C& lcd, const String& agent, const String& state,
                     ScrollState& sc, const String& task) {
-  // Line 1 fixed
-  String line1 = agent + " " + state;
+  // Line 1: Agent name + State descriptivo
+  String stateText;
+  if (state == "IDLE") stateText = "sleeping";
+  else if (state == "WORKING") stateText = "working";
+  else if (state == "COMMUNICATING") stateText = "calling";
+  else stateText = "?";
+
+  String line1 = agent + " " + stateText;
   line1 = fit16(line1);
 
-  // If task changed, reset scroll
-  if (sc.text != task) scrollReset(sc, task);
+  // Line 2: Descripción personalizada por agente
+  String line2Text;
+
+  if (state == "COMMUNICATING") {
+    // En llamada: muestra lo que está comunicando
+    line2Text = task; // e.g., "Sending plan to Momo"
+  } else if (state == "WORKING") {
+    // Trabajando: muestra descripción personalizada del agente
+    if (agent == "XOCAS" && agentDesc.xocas.length() > 0) {
+      line2Text = agentDesc.xocas;
+    } else if (agent == "MOMO" && agentDesc.momo.length() > 0) {
+      line2Text = agentDesc.momo;
+    } else if (agent == "LLADOS" && agentDesc.llados.length() > 0) {
+      line2Text = agentDesc.llados;
+    } else {
+      // Fallback si no hay descripción
+      String action;
+      if (agent == "XOCAS") action = "Planning";
+      else if (agent == "MOMO") action = "Researching";
+      else action = "Writing";
+      line2Text = action + "...";
+    }
+  } else {
+    // IDLE: muestra tarea original o espera
+    line2Text = task;
+  }
+
+  // Reset scroll si cambió el texto
+  if (sc.text != line2Text) scrollReset(sc, line2Text);
 
   String line2 = window16(sc.text, sc.pos);
 
