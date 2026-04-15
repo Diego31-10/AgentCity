@@ -1,5 +1,5 @@
 /**
- * ClawCity - REST API
+ * AgentHQ - REST API
  * GET /states  → current agent states (for ESP32 integration)
  * GET /health  → health check
  */
@@ -13,7 +13,7 @@ app.get('/states', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'clawcity' });
+  res.json({ status: 'ok', service: 'agenthq' });
 });
 
 export function startApi(port = 5001) {

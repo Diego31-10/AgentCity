@@ -1,5 +1,5 @@
 /**
- * ClawCity - File Writer
+ * AgentHQ - File Writer
  * Genera archivos en .txt, .docx, .pdf, .md según lo que pida el usuario
  */
 import { writeFileSync, mkdirSync } from 'fs';
@@ -84,7 +84,7 @@ export async function saveDocx(content, slug) {
   });
 
   const doc = new Document({
-    creator: 'ClawCity',
+    creator: 'AgentHQ',
     title: slug,
     sections: [{ children }],
   });
@@ -129,8 +129,7 @@ export function savePdf(content, slug) {
 
 // ── Dispatcher ───────────────────────────────────────────────────────
 export async function saveFile(content, task, format) {
-  const timestamp = new Date().toISOString().slice(0, 10);
-  const slug = `clawcity-${task.slice(0, 25).replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-${timestamp}`;
+  const slug = 'AgentHQ';
 
   switch (format) {
     case 'docx': return await saveDocx(content, slug);

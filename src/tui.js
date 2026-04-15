@@ -1,5 +1,5 @@
 /**
- * ClawCity TUI v2 - blessed full interactive dashboard
+ * AgentHQ TUI v2 - blessed full interactive dashboard
  * Agentes con representacion grafica por estado
  */
 import blessed from 'blessed';
@@ -73,12 +73,12 @@ function buildAgentContent(agentId, info) {
 }
 
 export function initTUI() {
-  screen = blessed.screen({ smartCSR: true, title: 'ClawCity', fullUnicode: false });
+  screen = blessed.screen({ smartCSR: true, title: 'AgentHQ', fullUnicode: false });
 
   // HEADER
   const header = blessed.box({
     top: 0, left: 0, width: '100%', height: 3,
-    content: '{center}{bold}{cyan-fg}=== CLAWCITY  -  Multi-Agent Dashboard ==={/cyan-fg}{/bold}{/center}',
+    content: '{center}{bold}{cyan-fg}=== AGENTHQ  -  Multi-Agent Dashboard ==={/cyan-fg}{/bold}{/center}',
     tags: true,
     border: { type: 'line' },
     style: { border: { fg: 'cyan' } },
