@@ -351,14 +351,12 @@ agenthq/
 ## 🎬 Live Demonstration
 
 ### 🎥 Physical Circuit in Action
-**[📹 INSERT DEMO VIDEO HERE - Shows ESP32 circuit responding in real-time]**
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/6523803f-3093-4b0b-8597-d5d399b60ef5" width="100%" controls>
+    Tu navegador no soporta videos de HTML5.
+  </video>
+</div>
 
-The demo video should show:
-- ✅ **Servo motors** responding to agent state changes (rotating to 3 positions)
-- ✅ **RGB LEDs** changing colors based on agent activity (Yellow/Green/Blue)
-- ✅ **LCD displays** showing live task text with smooth scrolling
-- ✅ **Buzzer** providing audio feedback on state transitions
-- ✅ **WiFi integration** pulling live data from REST API running on PC
 
 ### 📊 What Happens During Execution
 
